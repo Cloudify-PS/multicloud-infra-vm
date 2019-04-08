@@ -6,13 +6,6 @@ imports:
   - plugin:cloudify-utilities-plugin
 
 inputs:
-  resource_prefix:
-    description: Prefix of every resource created at this deployment on Openstack.
-    default: { get_secret: resource_prefix }
-
-  resource_suffix:
-    description: Suffix of every resource created at this deployment on Openstack.
-    default: { get_secret: resource_suffix }
 
   keystone_username:
     description: OS_USERNAME as specified in Openstack RC file.
@@ -50,7 +43,7 @@ inputs:
 
   name:
     type: string
-    default: generic-centos
+    default: generic_centos
 
 dsl_definitions:
 
@@ -77,7 +70,6 @@ node_templates:
           outputs:
             external_network: external_network_value
             public_network: public_network_value
-            private_network: private_network_value
           external_resource: { get_input: use_existing_network_deployment }
 
   external_network:
@@ -86,16 +78,6 @@ node_templates:
       openstack_config: *client_config
       use_external_resource: true
       resource_id: { get_attribute: [network_deployment, deployment, outputs, external_network_value] }
-    relationships:
-      - type: cloudify.relationships.depends_on
-        target: network_deployment
-
-  mgmt_network:
-    type: cloudify.openstack.nodes.Network
-    properties:
-      openstack_config: *client_config
-      use_external_resource: true
-      resource_id: { get_attribute: [network_deployment, deployment, outputs, private_network_value] }
     relationships:
       - type: cloudify.relationships.depends_on
         target: network_deployment
@@ -116,9 +98,8 @@ node_templates:
       openstack_config: *client_config
       resource_id:
         concat:
-          - { get_input: resource_prefix }
+          - { get_input: name }
           - '_security_group'
-          - { get_input: resource_suffix }
       rules:
         - direction: ingress
           protocol: tcp
@@ -133,17 +114,6 @@ node_templates:
           port_range_min: null
           port_range_max: null
 
-  mgmt_floating_ip_address:
-    type: cloudify.openstack.nodes.FloatingIP
-    properties:
-      openstack_config: *client_config
-      use_external_resource: false
-      floatingip:
-        floating_network_name: { get_attribute: [external_network, external_name] }
-    relationships:
-      - type: cloudify.relationships.depends_on
-        target: external_network
-
   public_floating_ip_address:
     type: cloudify.openstack.nodes.FloatingIP
     properties:
@@ -155,24 +125,6 @@ node_templates:
       - type: cloudify.relationships.depends_on
         target: external_network
 
-  mgmt_port:
-    type: cloudify.openstack.nodes.Port
-    properties:
-      openstack_config: *client_config
-      port:
-        name:
-          concat:
-            - { get_input: resource_prefix }
-            - "_mgmt_port"
-            - { get_input: resource_suffix }
-    relationships:
-    - type: cloudify.relationships.contained_in
-      target: mgmt_network
-    - type: cloudify.openstack.port_connected_to_security_group
-      target: network_security_group
-    - type: cloudify.openstack.port_connected_to_floating_ip
-      target: mgmt_floating_ip_address
-
   public_port:
     type: cloudify.openstack.nodes.Port
     properties:
@@ -180,9 +132,8 @@ node_templates:
       port:
         name:
           concat:
-            - { get_input: resource_prefix }
+            - { get_input: name }
             - "_public_port"
-            - { get_input: resource_suffix }
     relationships:
     - type: cloudify.relationships.contained_in
       target: public_network
@@ -202,44 +153,6 @@ node_templates:
       create_if_missing: False
       resource_id: { get_input: image_id }
 
-  keypair:
-    type: cloudify.keys.nodes.RSAKey
-    properties:
-      resource_config:
-        public_key_path:
-          concat:
-            - "/etc/cloudify/.ssh/"
-            - { get_input: resource_prefix }
-            - "_"
-            - { get_input: name }
-            - "_keypair"
-            - { get_input: resource_suffix }
-            - ".pub"
-        private_key_path:
-          concat:
-            - "/etc/cloudify/.ssh/"
-            - { get_input: resource_prefix }
-            - "_"
-            - { get_input: name }
-            - "_keypair"
-            - { get_input: resource_suffix }
-            - ".pem"
-        openssh_format: true
-      use_secret_store: false
-      key_name:
-        concat:
-          - { get_input: resource_prefix }
-          - "_"
-          - { get_input: name }
-          - "_keypair"
-          - { get_input: resource_suffix }
-    interfaces:
-      cloudify.interfaces.lifecycle:
-        create:
-          implementation: keys.cloudify_ssh_key.operations.create
-          inputs:
-            store_private_key_material: true
-
   cloud_config:
     type: cloudify.nodes.CloudInit.CloudConfig
     properties:
@@ -249,13 +162,7 @@ node_templates:
             shell: /bin/bash
             sudo: ['ALL=(ALL) NOPASSWD:ALL']
             ssh-authorized-keys:
-              - { get_attribute: [ keypair, public_key_export ] }
-        runcmd:
-          - ifconfig eth1 up
-          - dhclient eth1
-    relationships:
-      - type: cloudify.relationships.depends_on
-        target: keypair
+              - { get_secret: agent_key_public }
 
   vm:
     type: cloudify.openstack.nodes.Server
@@ -263,7 +170,6 @@ node_templates:
       openstack_config: *client_config
       agent_config:
         install_method: none
-      management_network_name: { get_attribute: [ mgmt_network, external_name ] }
     interfaces:
       cloudify.interfaces.lifecycle:
         create:
@@ -271,17 +177,13 @@ node_templates:
             args:
               name:
                 concat:
-                  - { get_input: resource_prefix }
-                  - "_"
                   - { get_input: name }
-                  - { get_input: resource_suffix }
+                  - "_vm"
               image: { get_input: image_id }
               flavor: { get_input: flavor_id }
               key_name: ''
               userdata: { get_attribute: [ cloud_config, cloud_config ] }
     relationships:
-    - type: cloudify.openstack.server_connected_to_port
-      target: mgmt_port
     - type: cloudify.openstack.server_connected_to_port
       target: public_port
     - type: cloudify.relationships.depends_on
@@ -289,9 +191,9 @@ node_templates:
 
 
 capabilities:
-  mgmt_floating_ip:
-    value: { get_attribute: [mgmt_floating_ip_address, floating_ip_address] }
-  public_floating_ip:
+  vm_ip:
+    value: { get_attribute: [public_port, fixed_ip_address] }
+  vm_public_ip:
     value: { get_attribute: [public_floating_ip_address, floating_ip_address] }
   private_key_content:
-    value: { get_attribute: [keypair, private_key_export] }
+    value: { get_secret: agent_key_private }
