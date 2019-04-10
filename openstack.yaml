@@ -39,7 +39,7 @@ inputs:
 
   image_id:
     type: string
-    default: { get_secret: centos_image_id }
+    default: { get_secret: centos_core_image }
 
   name:
     type: string
