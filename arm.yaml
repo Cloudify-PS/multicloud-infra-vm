@@ -1,0 +1,96 @@
+tosca_definitions_version: cloudify_dsl_1_3
+
+
+imports:
+  - http://cloudify.co/spec/cloudify/4.5.5/types.yaml
+  - plugin:cloudify-azure-plugin
+  - plugin:cloudify-utilities-plugin
+
+
+inputs:
+
+  azure_subscription_id:
+    default: { get_secret: azure_subscription_id }
+
+  azure_tenant_id:
+    default: { get_secret: azure_tenant_id }
+
+  azure_client_id:
+    default: { get_secret: azure_client_id }
+
+  azure_client_secret:
+    default: { get_secret: azure_client_secret }
+
+  azure_location:
+    default: { get_secret: azure_location }
+
+  image:
+    description: Image information
+    default:
+      publisher: OpenLogic
+      offer: CentOS
+      sku: 7.6
+      version: latest
+
+  size:
+    description: Name of Virtual Machine Size in Azure.
+    default: Standard_B1s
+
+  # network_deployment_name:
+  #   default: azure-example-network
+  #
+  # use_existing_network_deployment:
+  #   default: true
+
+  resource_prefix:
+    description: Prefix of every resource created at this deployment on Azure.
+    default: { get_secret: resource_prefix }
+
+  resource_suffix:
+    description: Suffix of every resource created at this deployment on Azure.
+    default: { get_secret: resource_suffix }
+
+  name:
+    type: string
+    default: centosvm
+
+
+dsl_definitions:
+
+  azure_config: &azure_config
+    subscription_id: { get_input: azure_subscription_id }
+    tenant_id: { get_input: azure_tenant_id }
+    client_id: { get_input: azure_client_id }
+    client_secret: { get_input: azure_client_secret }
+
+
+node_templates:
+
+  vm:
+    type: cloudify.azure.Deployment
+    properties:
+      name: jaroslawresrouce_group6
+      location: westeurope
+      azure_config: *azure_config
+      params:
+        resourcePrefix: { get_input: resource_prefix }
+        resourceSuffix: { get_input: resource_suffix }
+        location: { get_input: azure_location }
+        vmName: { get_input: name }
+        vmSize: { get_input: size }
+        image: { get_input: image }
+        adminUsername: centos
+        adminPublicKey: { get_secret: agent_key_public }
+      template_file: templates/arm.json
+#
+#
+# outputs:
+#
+#   url:
+#     description: URL of the web application served by JBoss server
+#     value:
+#       concat:
+#         - "http://"
+#         - { get_capability: [{ concat: [{ get_input: cloud_env }, "-infra-vm"]}, vm_public_ip] }
+#         - ":8080/"
+#         - { get_input: app_name }
