@@ -3,7 +3,7 @@ tosca_definitions_version: cloudify_dsl_1_3
 
 imports:
   - http://cloudify.co/spec/cloudify/4.5.5/types.yaml
-  - plugin:cloudify-azure-plugin
+  - plugin:cloudify-azure-plugin?version=2.1.2
   - plugin:cloudify-utilities-plugin
 
 
@@ -66,11 +66,36 @@ dsl_definitions:
 
 node_templates:
 
+  # network_deployment:
+  #   type: cloudify.nodes.DeploymentProxy
+  #   properties:
+  #     resource_config:
+  #       blueprint:
+  #         id: { get_input: network_deployment_name }
+  #         blueprint_archive: https://github.com/cloudify-examples/azure-example-network/archive/master.zip
+  #         main_file_name: simple-blueprint.yaml
+  #         external_resource: { get_input: use_existing_network_deployment }
+  #       deployment:
+  #         id: { get_input: network_deployment_name }
+  #         inputs:
+  #           resource_prefix: { get_input: resource_prefix }
+  #           resource_suffix: { get_input: resource_suffix }
+  #         outputs:
+  #           resource_group: resource_group_value
+  #           virtual_network: virtual_network_value
+  #           public_subnet: public_subnet_value
+  #           private_subnet: private_subnet_value
+  #         external_resource: { get_input: use_existing_network_deployment }
+
   vm:
     type: cloudify.azure.Deployment
     properties:
-      name: jaroslawresrouce_group6
-      location: westeurope
+      name:
+        concat:
+          - { get_input: resource_prefix }
+          - 'resource_group'
+          - { get_input: resource_suffix }
+      location: { get_input: azure_location }
       azure_config: *azure_config
       params:
         resourcePrefix: { get_input: resource_prefix }
@@ -78,19 +103,16 @@ node_templates:
         location: { get_input: azure_location }
         vmName: { get_input: name }
         vmSize: { get_input: size }
-        image: { get_input: image }
+        # image: { get_input: image }
         adminUsername: centos
         adminPublicKey: { get_secret: agent_key_public }
       template_file: templates/arm.json
-#
-#
-# outputs:
-#
-#   url:
-#     description: URL of the web application served by JBoss server
-#     value:
-#       concat:
-#         - "http://"
-#         - { get_capability: [{ concat: [{ get_input: cloud_env }, "-infra-vm"]}, vm_public_ip] }
-#         - ":8080/"
-#         - { get_input: app_name }
+
+
+capabilities:
+  vm_ip:
+    value: { get_attribute: [vm, outputs, ip, value, ipConfigurations, 0, properties, privateIPAddress] }
+  vm_public_ip:
+    value: { get_attribute: [vm, outputs, public_ip, value, ipAddress] }
+  private_key_content:
+    value: { get_secret: agent_key_private }
