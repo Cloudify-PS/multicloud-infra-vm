@@ -1,9 +1,9 @@
 tosca_definitions_version: cloudify_dsl_1_3
 
 imports:
-  - http://cloudify.co/spec/cloudify/4.5.5/types.yaml
+  - http://cloudify.co/spec/cloudify/5.0.0/types.yaml
   - plugin:cloudify-openstack-plugin?version=2.14.7
-  - plugin:cloudify-utilities-plugin
+  - plugin:cloudify-utilities-plugin?version=1.14.0
 
 inputs:
 
@@ -35,11 +35,11 @@ inputs:
 
   flavor_id:
     type: string
-    default: 2
+    default: { get_secret: small_image_flavor }
 
   image_id:
     type: string
-    default: { get_secret: centos_image_id }
+    default: { get_secret: centos_core_image }
 
   name:
     type: string
